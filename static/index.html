@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat screen</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js" integrity="sha512-MgkNs0gNdrnOM7k+0L+wgiRc5aLgl74sJQKbIWegVIMvVGPc1+gc1L2oK9Wf/D9pq58eqIJAxOonYPVE5UwUFA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        .center {
+            margin: auto;
+            width: 30%;
+        }
+        .w3-sidebar{height:100%;width:200px;background-color:rgb(255, 255, 255);position:fixed !important;z-index:0;overflow:auto}
+        .w3-bar-block .w3-bar-item{width:100%;display:block;padding:8px 16px;text-align:left;border:none;white-space:normal;float:none;outline:0}
+        .w3-button{border:none;display:inline-block;padding:8px 16px;vertical-align:middle;overflow:hidden;text-decoration:none;color:inherit;background-color:inherit;text-align:center;cursor:pointer;white-space:nowrap}
+        /* div {
+            height:100px;
+            width :100px;
+            background:green;
+            display:block;
+            opacity:1;
+            transition : all .3s;
+            -wekit-transition : all .3s;
+            -moz-transition : all .3s;
+        } */
+        /* .container{
+            position: fixed;
+        } */
+        .left{
+            float: left;
+        }
+        .right{
+            float: left;
+        }
+        #msgContainer{
+            overflow: auto;
+        }
+        /* width */
+        ::-webkit-scrollbar {
+        width: 15px;
+        }
+        /* Track */
+        ::-webkit-scrollbar-track {
+        box-shadow: offset 0 0 5px grey; 
+        border-radius: 10px;
+        }
+        /* Handle */
+        ::-webkit-scrollbar-thumb {
+        background: #3f3fee; 
+        border-radius: 8px;
+        }
+        /* Handle on hover */
+        ::-webkit-scrollbar-thumb:hover {
+        background: #034aa1; 
+        }
+        a {
+        color: rgb(1, 13, 66);
+        text-decoration: none;
+        cursor: auto;
+        }
+        .inactiveLink {
+        pointer-events: none !important;
+        cursor: default;
+        }
+        .w3-button:nth-child(even){
+        background: lightgreen
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="center">Chat Screen</h1>
+        <div id="connectSpace" style="width:75%;left:0;">
+            <input id="username" type="text" placeholder="Enter your username"></input>
+            <button id="btnConnect" onclick="connect()">Connect</button>
+        </div>
+        <div id="msgContainer" style="width:75%;min-height:85vh;left:0;" class="left">
+            
+        </div>
+        <div id="usersSpace" class="w3-sidebar w3-bar-block w3-card right" style="width:25%;right:0;">
+            <h3 class="w3-bar-item" style="margin:auto">All Users</h3>
+            
+        </div>
+    </div>
+    <script>
+        const socket = io();
+        let username;
+        let focusedPerson; 
+        const msgData = {};
+        const usersSpace = document.getElementById("usersSpace");
+        const msgContainer = document.getElementById("msgContainer")
+        msgContainer.style.height = usersSpace.style.height;
+        window.addEventListener("beforeunload", function(event) {
+            event.preventDefault();
+            return event.returnValue = "If you reload this page, you will lose all messages.";
+        })
+        async function connect() {
+            try{
+                document.getElementById("btnConnect").disabled = true;
+                let username = document.getElementById("username").value;
+                if(username.length == 0) {
+                    document.getElementById("btnConnect").disabled = false;
+                    tempAlert("please provide valid username", 2, 1);
+                    return;
+                }
+                socket.emit("new-user", username);
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        }
+        socket.on("userExists", ()=>{
+            try {
+                tempAlert("This username already exists. Please choose another.", 3, 1, 2000)
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+            document.getElementById("btnConnect").disabled = false;
+        })
+        socket.on("connection-success", (db, username) => {
+            try {
+                document.getElementById("connectSpace").remove();
+                usersSpace.visibility = "visible";
+                username = username;
+                tempAlert("Connection Success!", 1, 1, 2000);
+                let defmsgdiv = document.createElement("div");
+                defmsgdiv.className = "center"
+                defmsgdiv.id = "defMessage"
+                let temp = document.createElement("p");
+                temp.innerHTML = "Welcome to chatty app.";
+                defmsgdiv.appendChild(temp)
+                temp = document.createElement("sub");
+                temp.innerHTML = "Version 1.0.1"
+                defmsgdiv.appendChild(temp)
+                defmsgdiv.setAttribute("style", "border: 1px solid rgb(10,10,77); background-color: rgb(70,70,154)")
+                msgContainer.appendChild(defmsgdiv)
+                msgContainer.style.backgroundColor = "rgb(29,29,77)"
+                msgContainer.style.border="2px solid rgb(110, 108, 108)"
+                Object.keys(db).forEach(function(key){
+                    if (key !== username) {
+                        createUser(key, db[key])
+                    }
+                });
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        })
+        socket.on('private-message', (id, msg) => {
+            try {
+                msgData[id].push({data: msg, recieved: true});
+                if(id == focusedPerson){
+                    generateMessage(msg, 1);
+                    // let p = document.createElement("p");
+                    // p.innerHTML = msg;
+                    // p.setAttribute("style", "")
+                    // p.className = type? "left" : "right";
+                    // msgContainer.appendChild(p);
+                }
+                else{
+                    document.getElementById(`not_${id}`).visibility = "visible";
+                }
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        })
+        socket.on('other-user-connects', (username, id) => {
+            createUser(username, id);
+        })
+        socket.on('other-user-disconnects', (username, id) => {
+            try {
+                let allUsers = usersSpace.children;
+                for(let i=0; i<allUsers.length; i++){
+                    if(allUsers[i].id === id){
+                        usersSpace.removeChild(allUsers[i]);
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        })
+        function createUser(key, id){
+            try {
+                let userdiv = document.createElement("div");
+                userdiv.setAttribute("style", "min-height:24px; padding:5px")
+                let user = document.createElement("a");
+                user.id = `us_${key}`
+                let notif = document.createElement("span");
+                notif.id = `not_${key}`
+                notif.setAttribute("style", "visibility:hidden; position:absolute; margin-left:3px; background-color:black; text-color:white; border-radius:7px;")
+                user.href = "#";
+                user.innerHTML = key
+                user.classList = ["w3-bar-item", "w3-button", "inactiveLink"]
+                userdiv.appendChild(user); userdiv.appendChild(notif);
+                usersSpace.appendChild(userdiv);
+                msgData[key] = [];
+                userdiv.onclick = function(e){
+                    let el;
+                    if(e.target.tagName == "A" || e.target.tagName == "SPAN"){
+                        el = e.target.parentNode
+                    }
+                    else el = e.target;
+                    let id = el.firstChild.id;
+                    el.
+                    focusedPerson = id.substring(3);
+                    populateData();
+                    generateForm()
+                }
+            } catch (error) {
+                console.log("error:" + "createUser()" + error.name + ": " + error.message)
+            }
+        }
+        function populateData(){
+            try {
+                let msgs = msgData[focusedPerson];
+                if(!msgs) {
+                    tempAlert("User disconnected a while ago.", 2, 0.5, 2000)
+                    return
+                }
+                removeAllChildren(msgContainer);
+                for(let i=0; i<msgs.length; i++){
+                    let className = msgs[i].recieved? "left" : "right";
+                    let p = document.createElement("p");
+                    p.innerHTML = msgs[i].data;
+                    p.className = className;
+                    msgContainer.appendChild(p);
+                }
+            } catch (error) {
+                console.log("error:" +"populateData()" + error.name + ": " + error.message)
+            }
+        }
+        function removeAllChildren(parent){
+            try {
+                let i = parent.firstChild;
+                while(i){
+                    parent.removeChild(i);
+                    i = parent.firstChild;
+                }
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        }
+        function generateForm(){
+            try {
+                let div = document.createElement("div");
+                msgContainer.appendChild(div);
+                let input = document.createElement("input");
+                let btn = document.createElement("button");
+                div.appendChild(input);
+                div.appendChild(btn);
+                btn.onclick = () => {
+                    try {
+                        if(input.value.length){
+                            socket.emit("message-privately", focusedPerson, input.value);
+                        }
+                        else tempAlert("Message cannot be empty!", 3, 0.7)
+                    } catch (error) {
+                        console.log("error:" + "generateForm()" + error.name + ": " + error.message)
+                    }
+                };
+                input.setAttribute("style", "min-height:20px; position:absolute: left:2px; display:inline");
+                input.setAttribute("placeholder", "Write message...");
+                btn.setAttribute("style", "height:20px; width:20px; position:absolute; right:0px; background-color:#101070; border:1px solid #777777; padding:2px; display:inline");
+                div.setAttribute("style", "width:auto;position:absolute;margin-top:0px;background-color:#101010;border:1px solid #555555;padding:8px")
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        }
+        function tempAlert(msg='sample notify', type=4, rigid=0.5, duration=1000){
+            try {
+                let el = document.createElement("div");
+                el.setAttribute("style","min-height:5vh; min-width:30vw;position:fixed;top:5%; right:5%; z-index:999999, padding:20px");
+                // type -> ["sucess", "danger", "warning", "info"]
+                el.style.backgroundColor = type==1? `rgba(0,255,0,${rigid})` : type==2? `rgba(255,0,0,${rigid})` : type==3? `rgba(0,255,255,${rigid})`: `rgba(255,0,0,${rigid}`;
+                el.innerHTML = msg;
+                document.body.appendChild(el);
+                setTimeout(function(){
+                    el.parentNode.removeChild(el);
+                }, duration);
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        }
+        let mapKey = {};
+        function defaultRun() {
+            try {
+                document.addEventListener("keydown", function(e) {
+                    if(e.keyCode !== 13 && e.keyCode !== 16){
+                        mapKey = {}; return;
+                    }
+                    else if(e.keyCode === 16){
+                        mapKey[e.keyCode.toString()] = true;
+                    }
+                    else {
+                        mapKey["16"] && console.log("STORED MESSAGES: ", msgData);
+                        mapKey = {};
+                    }
+                })
+            } catch (error) {
+                console.log("error:" + error.name + ": " + error.message)
+            }
+        }
+        defaultRun();
+    </script>
+</body>
+</html>
